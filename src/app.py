@@ -1,13 +1,15 @@
+import os
+import uuid
+
 from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationSummaryMemory
+from langchain.schema.document import Document
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain.schema.document import Document
-from langchain.memory import ConversationSummaryMemory
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.text_splitter import CharacterTextSplitter
-from api_request import k8s_request
 from openai import OpenAI
-import os
+
+from api_request import k8s_request
 
 ### To locally test the app ,uncomment this function and the last two lines of this file
 # def main():
@@ -16,42 +18,50 @@ import os
 #     query = input()
 #     ask(query)
 
+def initiate_sessions():
+    global sessions
+    sessions = {}
 
-def initiate_generator():
-    # Initiate LLM
-    llm = ChatOpenAI(
-        model_name="gpt-3.5-turbo",
-        temperature=0,
-        openai_api_key=OPENAI_API_KEY)
+def get_session(session_id): 
+    return sessions.get(session_id)
+
+def new_session(model, temperature):
     # Create vectorstore
-    memory, retriever = create_vectorstore(llm)
+    llm = ChatOpenAI(
+        model_name=model,
+        temperature=float(temperature),
+        openai_api_key=OPENAI_API_KEY)
+    session_id = str(uuid.uuid4())
+    memory, retriever = create_vectorstore(llm, session_id)
     # Create chat response generator
-    global generator
     generator = ConversationalRetrievalChain.from_llm(
                 llm=llm,
                 retriever=retriever,
                 memory=memory)
+    # Add session to sessions map
+    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id}
+    return sessions[session_id]
 
 
-def create_vectorstore(llm):
+def create_vectorstore(llm, session_id):
     # Create Chroma vector store
     data_start = "start vectorstore"
     docs = [Document(page_content=x) for x in data_start]
     vectorstore = Chroma.from_documents(documents=docs, embedding=OpenAIEmbeddings(openai_api_key = OPENAI_API_KEY))
 
     memory = ConversationSummaryMemory(
-    llm=llm, memory_key="chat_history", return_messages=True)
+    llm=llm, memory_key="chat_history",  return_messages=True)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
 
     return memory, retriever
 
 
-def ask(query):
+def ask(query, session):
     query += ". If an API response is provided as context and in the provided API response doesn't have this information or no context is provided, make sure that your response is 'I don't know'."
-    response = generator.invoke(query)
+    response = session['generator'].invoke(query)
     if "I'm sorry" in response['answer'] or "there is no information" in response['answer'] or response['answer'] == "I don't know":
-        feed_vectorstore(query)
-        response = generator.invoke(query)
+        feed_vectorstore(query, session)
+        response = session['generator'].invoke(query)
 
     print(response['answer'])
     return response['answer']
@@ -59,8 +69,7 @@ def ask(query):
     # query = input().lower()
 
 
-def feed_vectorstore(query):
-    llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY)
+def feed_vectorstore(query, session):
     bot = k8s_request(query, OPENAI_API_KEY)
     response = k8s_request.get_API_response(bot)
 
@@ -69,12 +78,13 @@ def feed_vectorstore(query):
     docs = [Document(page_content=x) for x in all_splits]
     vectorstore = Chroma.from_documents(documents=docs, embedding=OpenAIEmbeddings(openai_api_key = OPENAI_API_KEY))
 
+    llm = session['llm']
+
     memory = ConversationSummaryMemory(
     llm=llm, memory_key="chat_history", return_messages=True)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
 
-    global generator
-    generator = ConversationalRetrievalChain.from_llm(
+    sessions[session['id']]['generator'] = ConversationalRetrievalChain.from_llm(
                 llm=llm,
                 retriever=retriever,
                 memory=memory)
