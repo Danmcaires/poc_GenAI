@@ -97,6 +97,21 @@ class k8s_request():
         else:
             return f"Error trying to make API request:\n {response.status_code}, {response.text}"
 
+    def summarize_response(self, response):
+        llm = ChatOpenAI(openai_api_key = self.api_key)
+        prompt = ChatPromptTemplate.from_messages([
+        ("system", f"You are a IA that transforms JSON objects into a plain text.\n\nYou will create a text summarizing all the information contained on the JSON that you will recieve as input from the user.\n\nMake sure that all the information in summarized into a human friendly text. Make sure to not create any information that is not contained in the JSON.\n\nYou may rename certain fields to be better readeble by a human."),
+        ("user", "{input}")
+        ])
+
+        output_parser = StrOutputParser()
+        chain = prompt | llm | output_parser
+
+        # Get completion
+        completion = chain.invoke({"input": response})
+
+        return completion
+
 
 class stx_request():
 
