@@ -14,11 +14,13 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from api_request import k8s_request, stx_request
 from openai import OpenAI
 from constants import CLIENT_ERROR_MSG
+from sessions import SessionManager
+sessions = SessionManager()
 
 
 def initiate_sessions():
     global sessions
-    sessions = {}
+    sessions = SessionManager()
 
 def get_session(session_id):
     return sessions.get(session_id)
@@ -43,6 +45,7 @@ def new_session(model, temperature):
 
     # Add session to sessions map
     sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id}
+    sessions.clear_older_sessions()
     return sessions[session_id]
 
 
