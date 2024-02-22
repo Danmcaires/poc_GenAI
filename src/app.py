@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 import os
-import re
 import sys
 import uuid
 from langchain.text_splitter import CharacterTextSplitter
@@ -23,6 +22,18 @@ def initiate_sessions():
     sessions = {}
     global node_list
     node_list = create_instance_list()
+
+
+def delete_old_sessions():
+    sessions_del = []
+    for session, value in sessions.items():
+        time_difference = datetime.datetime.now() - value['timestamp']
+        if time_difference.total_seconds() > 60 * 60:
+            sessions_del.append(session)
+
+    for session in sessions_del:
+        LOG.info(f"Deleting old session: {session}")
+        del sessions[session]
 
 
 def get_session(session_id):
@@ -48,8 +59,12 @@ def new_session(model, temperature):
     generator.invoke(query)
 
     # Add session to sessions map
-    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id}
+    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id, "timestamp": datetime.datetime.now()}
     LOG.info(f"New session with ID: {session_id} initiated. Model: {model}, Temperature: {temperature}")
+
+    # Delete old sessions
+    delete_old_sessions()
+
     return sessions[session_id]
 
 
