@@ -8,7 +8,7 @@ WORKDIR /app
 RUN mkdir src
 
 # Copy the requirements file into the container
-COPY requirements/requirements.txt .
+COPY ./requirements.txt .
 
 # Install the Python dependencies
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
