@@ -4,7 +4,6 @@ certs/ca.crt
 certs/apiserver-kubelet-client.crt
 certs/apiserver-kubelet-client.key
 test.py
-main.py
 .chroma/
 .idea/
 

@@ -1,7 +1,7 @@
 from flask import Flask, Response, request
 from flask_restful import Api, Resource
-
 import app as chat
+
 
 app = Flask(__name__)
 api = Api(app)
@@ -19,6 +19,7 @@ class Chat(Resource):
         response = Response(answer,content_type="text/plain; charset=utf-8" )
         return response
 
+
 class Session(Resource):
     def get(self):
         session_temp = request.headers['temperature']
@@ -31,6 +32,7 @@ class Session(Resource):
 
 api.add_resource(Chat, '/chat')
 api.add_resource(Session, '/session')
+
 
 if __name__ == "__main__":
     chat.set_openai_key()
