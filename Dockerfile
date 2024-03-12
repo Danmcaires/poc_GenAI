@@ -19,7 +19,7 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 COPY ./src/* ./
 
 # Specify the command to run when the container starts
-CMD ["python", "main.py", "run"]
+CMD ["python", "main.py"]
 
 # Expose the port that the server will be listening to
 EXPOSE 2000
