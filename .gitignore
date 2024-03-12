@@ -1,3 +1,4 @@
+env/
 venv/
 certs/ca.crt
 certs/apiserver-kubelet-client.crt
