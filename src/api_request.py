@@ -9,13 +9,10 @@ import sys
 
 class openstack_request():
 
-    def __init__(self, user_query, key):
+    def __init__(self, key):
 
         # API key
         self.api_key = key
-
-        # User query
-        self.query = user_query
 
         # List of OpenStack functions
         self.apis = self.load_openstack_functions()
@@ -34,8 +31,8 @@ class openstack_request():
         return function_list
 
 
-    def get_path(self):
-        completion = self.get_path_completion()
+    def get_path(self,):
+        completion = self.get_path_completion(self.query)
         if completion[-1] == ")":
             path = "self.openstack_sdk." + completion
         else:
@@ -71,7 +68,8 @@ class openstack_request():
         return clean_completion
 
 
-    def get_API_response(self):
+    def get_API_response(self, query):
+        self.query = query
         path = self.get_path()
         LOG.info(f"running '{path}' function")
 
@@ -85,7 +83,7 @@ class openstack_request():
                     LOG.warn(msg)
                     return msg
 
-                str_response = f"OpenStack API response = {response}"
+                str_response = f"OpenStack {service} API response = {response}"
                 LOG.info("API response successfully retrieved.")
                 return str_response
 

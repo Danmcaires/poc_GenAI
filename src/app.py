@@ -36,13 +36,14 @@ def new_session(model, temperature):
                 llm=llm,
                 retriever=retriever,
                 memory=memory)
+    bot = openstack_request(OPENAI_API_KEY)
 
     # Give the LLM date time context
     query = f"From now on you will use {datetime.datetime.now()} as current datetime for any datetime related user query"
     generator.invoke(query)
 
     # Add session to sessions map
-    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id}
+    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id, "bot": bot}
     LOG.info(f"New session with ID: {session_id} initiated. Model: {model}, Temperature: {temperature}")
     return sessions[session_id]
 
@@ -99,7 +100,7 @@ def ask(query, session):
 
 
 def feed_vectorstore(query, session):
-    response = api_response(query)
+    response = session["bot"].get_API_response(query)
 
     if response is None:
         raise Exception('API response is null')
@@ -146,11 +147,3 @@ def is_api_key_valid(key):
     except Exception:
         raise Exception("The provided key is not valid.")
     return True
-
-
-def api_response(query):
-
-    bot = openstack_request(query, OPENAI_API_KEY)
-    response = openstack_request.get_API_response(bot)
-
-    return response
