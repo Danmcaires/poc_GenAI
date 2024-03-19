@@ -1,0 +1,8 @@
+copilot:
+  image: COPILOT_IMAGE
+  secrets:
+    OPENAI_API_KEY: OPENAI_API_KEY
+    OAM_IP: OAM_IP
+    WR_USER: WR_USER
+    WR_PASSWORD: WR_PASSWORD
+    TOKEN: TOKEN

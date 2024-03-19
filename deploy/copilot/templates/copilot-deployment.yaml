@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: copilot
+  labels:
+    app: copilot-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: copilot-api
+  template:
+    metadata:
+      labels:
+        app: copilot-api
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: copilot
+        image: {{ .Values.copilot.image }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 2000
+        envFrom:
+        - secretRef:
+            name: copilot-secret
