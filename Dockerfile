@@ -1,22 +1,40 @@
-# Use an appropriate base image for Python
-FROM python:3.8
+# STAGE 1 - Install build dependencies
+FROM python:3.8-slim AS builder
 
-# Set the working directory inside the container
+# Set workdir
 WORKDIR /app
 
-# Create src directory
-RUN mkdir src
+# Install required packages so the layer can
+# compile Python libraries with binary dependencies
+RUN apt update && \
+    apt install -y build-essential python3-dev gcc
 
-# Copy the requirements file into the container
+# Copy only requirements file
 COPY ./requirements.txt .
 
-# Install the Python dependencies
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+# Create venv and install requirements
+RUN python -m venv .venv && \
+    .venv/bin/pip install --upgrade pip && \
+    .venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code into the container
-# Copies everything without the file structure so we don't need
-# to even set the PYTHONPATH and just go with the flow
+# Delete unnecessary files
+RUN find /app/.venv \( -type d -a -name test -o -name tests \) -o \( -type f -a -name '*.pyc' -o -name '*.pyo' \) -exec rm -rf '{}' \+ && \
+    find /app/.venv -name '__pycache__' | xargs rm -rf
+
+# STAGE 2 - Copy only necessary files to runner stage
+FROM python:3.8-slim
+
+# Set workdir
+WORKDIR /app
+
+# Copy dependencies files from builder
+COPY --from=builder /app /app
+
+# Copy app source files
 COPY ./src/* ./
+
+# Define required variables for app to run
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Specify the command to run when the container starts
 CMD ["python", "main.py"]
