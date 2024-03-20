@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 import os
-import re
 import sys
 import uuid
 
