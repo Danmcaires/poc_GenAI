@@ -1,3 +1,4 @@
+import boto3
 import datetime
 import json
 import logging
@@ -13,12 +14,17 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from openai import OpenAI
+from langchain_community.llms import Bedrock
+from langchain_community.embeddings.bedrock import BedrockEmbeddings
 
 from api_request import k8s_request, wr_request
-from constants import CLIENT_ERROR_MSG, LOG, MODEL
+from constants import CLIENT_ERROR_MSG, LOG, MODEL_NAMES
 
+MODEL_PARAMS = {
+    'model_id' : 'meta.llama2-13b-chat-v1',
+    'model_name' : 'Llama 2 Chat 13B',
+    'temperature' : 0.5,
+}
 
 def initiate_sessions():
     global sessions
@@ -31,11 +37,18 @@ def get_session(session_id):
     return sessions.get(session_id)
 
 
-def new_session(model, temperature):
+def new_session(model_id='meta.llama2-13b-chat-v1', temperature=0.5):
+    MODEL_NAME = MODEL_NAMES[model_id]
+    MODEL_PARAMS['model_id'] = model_id
+    MODEL_PARAMS['model_name'] = MODEL_NAME
+    MODEL_PARAMS['temperature'] = temperature
+
     # Create vectorstore
-    llm = ChatOpenAI(
-        model_name=model, temperature=float(temperature), openai_api_key=OPENAI_API_KEY
+    llm = Bedrock(
+        model_id=model_id,
+        region_name='us-east-1',
     )
+
     session_id = str(uuid.uuid4())
     memory, retriever = create_vectorstore(llm)
     # Create chat response generator
@@ -43,11 +56,11 @@ def new_session(model, temperature):
 
     # Give the LLM date time context
     query = f"From now on you will use {datetime.datetime.now()} as current datetime for any datetime related user query"
-    generator.invoke(query)
-
+    generator.invoke({'prompt':query})
+    llm.stream(query)
     # Create API connections
-    k8s_bot = k8s_request(OPENAI_API_KEY)
-    wr_bot = wr_request(OPENAI_API_KEY)
+    k8s_bot = k8s_request()
+    wr_bot = wr_request()
 
     # Add session to sessions map
     sessions[session_id] = {
@@ -58,7 +71,7 @@ def new_session(model, temperature):
         "wr_bot": wr_bot,
     }
     LOG.info(
-        f"New session with ID: {session_id} initiated. Model: {model}, Temperature: {temperature}"
+        f"New session with ID: {session_id} initiated. Model: {MODEL_NAME}, Temperature: {temperature}"
     )
     return sessions[session_id]
 
@@ -84,27 +97,31 @@ def create_vectorstore(llm):
     # Create Chroma vector store
     data_start = "start vectorstore"
     docs = [Document(page_content=x) for x in data_start]
-    vectorstore = Chroma.from_documents(
-        documents=docs, embedding=OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-    )
-
-    memory = ConversationBufferMemory(llm=llm, memory_key="chat_history", return_messages=True)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
-
-    return memory, retriever
+    # TODO Trocar o embedding para BedrockEmbedding
+    _embedding = BedrockEmbeddings(model_id=MODEL_PARAMS['model_id'])
+    # print(_embedding)
+    # vectorstore = Chroma.from_documents(
+    #     documents=docs, embedding=_embedding
+    # )
+    #
+    # memory = ConversationBufferMemory(llm=llm, memory_key="chat_history", return_messages=True)
+    # retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
+    #
+    # return memory, retriever
 
 
 def ask(query, session):
+    # TODO Refactor this
     query_completion = (
-        query
-        + ". If an API response is provided as context and in the provided API response doesn't have this information or no context is provided, make sure that your response is 'I don't know'. Unless the user explicitly ask for commands you will not provide any. Make sure to read the entire given context before giving your response."
+            query
+            + ". If an API response is provided as context and in the provided API response doesn't have this information or no context is provided, make sure that your response is 'I don't know'. Unless the user explicitly ask for commands you will not provide any. Make sure to read the entire given context before giving your response."
     )
     LOG.info(f"User query: {query}")
     response = session['generator'].invoke(query_completion)
 
     print(f'######{response}', file=sys.stderr)
 
-    client = boto3.client(service_name='bedrock-runtime')
+    llm = session['llm']
     prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>>User query:{query}\nResponse: {response} [/INST]"
 
     body = json.dumps(
@@ -115,13 +132,7 @@ def ask(query, session):
         }
     )
 
-    modelId = MODEL
-    accept = 'application/json'
-    contentType = 'application/json'
-
-    response = client.invoke_model(
-        body=body, modelId=modelId, accept=accept, contentType=contentType
-    )
+    response = llm.invoke(body)
     response_body = json.loads(response.get('body').read())
     print(response_body['generation'])
 
@@ -145,11 +156,12 @@ def feed_vectorstore(query, session):
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=0)
     all_splits = text_splitter.split_text(response)
     docs = [Document(page_content=x) for x in all_splits]
-    vectorstore = Chroma.from_documents(
-        documents=docs, embedding=OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-    )
-
+    # TODO Trocar de OPENAI Embedding para Bedrock Embedding
     llm = session['llm']
+
+    vectorstore = Chroma.from_documents(
+        documents=docs, embedding=BedrockEmbeddings(model_id=llm['model_id'], model_kwargs=llm['model_kwargs'])
+    )
 
     memory = ConversationBufferMemory(llm=llm, memory_key="chat_history", return_messages=True)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
@@ -160,6 +172,7 @@ def feed_vectorstore(query, session):
 
 
 def is_api_key_valid():
+    # Gotta be removed probably when we stop using AWS. Gonna keep it that way.
     create_logger()
     try:
         client = boto3.client(service_name='bedrock')
@@ -197,7 +210,7 @@ def define_api_pool(query, session):
 
 
 def api_response(query, session):
-    instance = define_system(query)
+    instance = define_system(query, session['llm'])
     print(f'Query being made to {instance["name"]}', file=sys.stderr)
     LOG.info(f'Query being made to {instance["name"]}')
 
@@ -216,9 +229,8 @@ def api_response(query, session):
     return response
 
 
-def define_system(query):
+def define_system(query, llm):
     # Initiate Boto3
-    client = boto3.client(service_name='bedrock-runtime')
 
     format_response = "name: <name>"
 
@@ -234,14 +246,8 @@ def define_system(query):
         }
     )
 
-    modelId = MODEL
-    accept = 'application/json'
-    contentType = 'application/json'
-
     # Get completion
-    response = client.invoke_model(
-        body=body, modelId=modelId, accept=accept, contentType=contentType
-    )
+    response = llm.invoke(body)
 
     response_body = json.loads(response.get('body').read())
     print(f'Completion: {response_body["generation"]}', file=sys.stderr)
@@ -288,3 +294,11 @@ def create_instance_list():
         LOG.warning("No subcloud information was added to the list of instances")
 
     return instance_list
+
+
+def test_functions():
+    session = new_session()
+    print(session)
+
+
+test_functions()

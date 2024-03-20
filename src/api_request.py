@@ -5,7 +5,6 @@ import sys
 import requests
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
 from constants import CLIENT_ERROR_MSG, LOG
 
