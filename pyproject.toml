@@ -1,0 +1,24 @@
+[tool.isort]
+py_version = "38"
+profile = "black"
+line_length = 100
+
+[tool.black]
+target-version = ['py38']
+line-length = 100
+skip-string-normalization = true
+preview = true
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''

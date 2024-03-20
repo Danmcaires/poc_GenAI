@@ -1,14 +1,16 @@
+import os
+import re
 import sys
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
-from constants import CLIENT_ERROR_MSG, LOG
 import requests
-import re
-import os
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
-class k8s_request():
+from constants import CLIENT_ERROR_MSG, LOG
+
+
+class k8s_request:
 
     def __init__(self, key):
         # Namespaces to be ignored
@@ -16,7 +18,6 @@ class k8s_request():
 
         # API key
         self.api_key = key
-
 
     def get_endpoint(self):
         completion = self.get_api_completion()
@@ -33,19 +34,23 @@ class k8s_request():
 
         return api_endpoint
 
-
     def get_api_completion(self):
         # Initiate OpenAI
-        llm = ChatOpenAI(openai_api_key = self.api_key)
+        llm = ChatOpenAI(openai_api_key=self.api_key)
 
         # Expected llm response format
         format_response = "api: <api_completion>"
 
         # Create prompt
-        prompt = ChatPromptTemplate.from_messages([
-        ("system", f"You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a kubernetes cluster.\n\nYou will only provide the API information that comes after the IP:PORT.\n\nMake sure the provided endpoint is a valid one.\n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Guarantee that the format is followed."),
-        ("user", "{input}")
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    f"You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a kubernetes cluster.\n\nYou will only provide the API information that comes after the IP:PORT.\n\nMake sure the provided endpoint is a valid one.\n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Guarantee that the format is followed.",
+                ),
+                ("user", "{input}"),
+            ]
+        )
 
         output_parser = StrOutputParser()
         chain = prompt | llm | output_parser
@@ -59,19 +64,20 @@ class k8s_request():
 
         return clean_completion
 
-
     def filter_response(self, response):
         if response.json().get('items', []) != []:
             pods = response.json().get('items', [])
             try:
                 filtered_pods = [
-                    pod for pod in pods if pod['metadata']['namespace'] not in self.excluded_namespaces]
+                    pod
+                    for pod in pods
+                    if pod['metadata']['namespace'] not in self.excluded_namespaces
+                ]
                 return filtered_pods
             except:
                 return response.json()
         else:
             return response.json()
-
 
     def save_query_and_instance(self, user_query, instance):
         self.query = user_query
@@ -83,7 +89,6 @@ class k8s_request():
         else:
             secure_oam = self.oam_ip.replace("http://", "https://")
             self.api_server_url = f"{secure_oam}6443"
-
 
     def get_API_response(self, user_query, instance):
         # Save class variables
@@ -110,7 +115,9 @@ class k8s_request():
         if response.status_code == 200:
             # Filter response for undesired namespaces
             filtered_response = self.filter_response(response)
-            buit_text_response = f"API {api_endpoint} response from {self.name} = {filtered_response}"
+            buit_text_response = (
+                f"API {api_endpoint} response from {self.name} = {filtered_response}"
+            )
             return buit_text_response
         else:
             error = f"Error trying to make API request:\n {response.status_code}, {response.text}"
@@ -118,7 +125,7 @@ class k8s_request():
             return error
 
 
-class wr_request():
+class wr_request:
 
     def __init__(self, key):
         # API key
@@ -127,13 +134,11 @@ class wr_request():
         # Embedded list of Wind River APIs
         self.apis = self.load_embedded_apis()
 
-
     def load_embedded_apis(self):
-        with open ("wr_apis.json", "r") as f:
+        with open("wr_apis.json", "r") as f:
             api_list = f.read()
 
         return api_list
-
 
     def get_endpoint(self):
         completion = self.get_api_completion()
@@ -141,32 +146,34 @@ class wr_request():
 
         return api
 
-
     def get_api_completion(self):
         # Initiate OpenAI
-        llm = ChatOpenAI(openai_api_key = self.api_key,
-                         temperature=0.4)
+        llm = ChatOpenAI(openai_api_key=self.api_key, temperature=0.4)
 
         # Expected llm response format
         format_response = "api: <api_url>"
 
         # Create prompt
-        prompt = ChatPromptTemplate.from_messages([
-        ("system", f"You are an API generator, based on the user question you will suggest the best API endpoint to retrieve the information from a Wind River cluster.\n\nYou will look in the context for the available APIs in a Wind River cluster.\n\nMake sure the provided endpoint is present on the provided context and check the action of the APIs to provide the ideal url for the user question. This user question is being made to a {self.type}.\n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Guarantee that the format is followed. Read the entire context before providing an answer."),
-        ("user", "Context:{context} \n\n\n Question:{question}")
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    f"You are an API generator, based on the user question you will suggest the best API endpoint to retrieve the information from a Wind River cluster.\n\nYou will look in the context for the available APIs in a Wind River cluster.\n\nMake sure the provided endpoint is present on the provided context and check the action of the APIs to provide the ideal url for the user question. This user question is being made to a {self.type}.\n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Guarantee that the format is followed. Read the entire context before providing an answer.",
+                ),
+                ("user", "Context:{context} \n\n\n Question:{question}"),
+            ]
+        )
 
         output_parser = StrOutputParser()
         chain = prompt | llm | output_parser
 
-        #Get completion
-        completion = chain.invoke({"context":self.apis, "question": self.query})
+        # Get completion
+        completion = chain.invoke({"context": self.apis, "question": self.query})
 
-        #completion = response.choices[0].message.content
+        # completion = response.choices[0].message.content
         clean_completion = completion.split(":")[1].strip()
 
         return clean_completion
-
 
     def save_query_and_instance(self, user_query, instance):
         self.auth_url = instance['URL']
@@ -174,10 +181,11 @@ class wr_request():
         self.password = os.environ['WR_PASSWORD']
         self.name = instance['name']
         self.type = instance['type']
-        self.api_server_url = re.search(r"(https?)://(?:\d{1,3}\.){3}\d{1,3}:", self.auth_url).group(0)
+        self.api_server_url = re.search(
+            r"(https?)://(?:\d{1,3}\.){3}\d{1,3}:", self.auth_url
+        ).group(0)
         self.query = user_query
         self.token = self.get_token()
-
 
     def get_API_response(self, user_query, instance):
         # Save class variables
@@ -187,7 +195,7 @@ class wr_request():
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "X-Auth-Token": self.token
+            "X-Auth-Token": self.token,
         }
 
         try:
@@ -209,9 +217,7 @@ class wr_request():
 
     def get_token(self):
         url = f"{self.auth_url}/v3/auth/tokens"
-        headers = {
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         data = {
             "auth": {
                 "identity": {
@@ -220,16 +226,11 @@ class wr_request():
                         "user": {
                             "name": self.user,
                             "domain": {"id": "default"},
-                            "password": self.password
+                            "password": self.password,
                         }
-                    }
+                    },
                 },
-                "scope": {
-                    "project": {
-                        "name": "admin",
-                        "domain": {"id": "default"}
-                    }
-                }
+                "scope": {"project": {"name": "admin", "domain": {"id": "default"}}},
             }
         }
 

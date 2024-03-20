@@ -3,7 +3,6 @@
 .gitignore
 .gitattributes
 
-
 # CI
 .codeclimate.yml
 .travis.yml
@@ -68,4 +67,7 @@ venv/
 DOCKER.md
 README.md
 .deploy/
-.nginx/
+.flake8
+.pre-commit-config.yaml
+dev-requirements.txt
+pyproject.toml

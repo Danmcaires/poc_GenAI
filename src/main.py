@@ -1,7 +1,7 @@
 from flask import Flask, Response, request
 from flask_restful import Api, Resource
-import app as chat
 
+import app as chat
 
 app = Flask(__name__)
 api = Api(app)
@@ -16,7 +16,7 @@ class Chat(Resource):
             return Response("Session not found", status=404)
 
         answer = chat.ask(question, session)
-        response = Response(answer,content_type="text/plain; charset=utf-8" )
+        response = Response(answer, content_type="text/plain; charset=utf-8")
         return response
 
 
@@ -26,7 +26,7 @@ class Session(Resource):
         session_model = request.headers['model']
         session = chat.new_session(session_model, session_temp)
 
-        response = Response(session['id'],content_type="text/plain; charset=utf-8" )
+        response = Response(session['id'], content_type="text/plain; charset=utf-8")
         return response
 
 
