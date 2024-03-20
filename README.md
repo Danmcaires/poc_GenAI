@@ -1,19 +1,18 @@
-> **_NOTE_**: Many changes were made to have this application run in a container,
-> it does not support local runs without changes.
-
 # StarlingX ChatBot demo
 
 The purpose of this demo is to demonstrate a chatbot that is capable of make
 API requests to the Kubernetes cluster inside the StarlingX system. In order to
 provide the informations to the user about the StarlingX cluster, the chatbot
-uses the Open AI LLM and LangChain framework.
+uses the LangChain framework to work.
 
 The specific case scenario of this demonstration is to show the ChatBot
 retrieving information about the pod `busybox` that is facing a deployment error.
 Furthermore the chatbot will also need to provide possible solutions for the
 problem.
 
-## Requisits
+## Requirements
+
+### Python requirements
 
 Before starting the execution of the chatbot some steps needs to be done in
 order to the chatbot function in its full intention.
@@ -29,6 +28,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 mkdir certs
 ```
+
+### VirtualBox connection
 
 After installing the required libraries, start your StarlingX VM. While you
 virtual machine is starting up, you will need to create a port-forward so the
@@ -69,6 +70,8 @@ run:
 sudo ip route add 192.168.206.0/24 via OAM_IP
 ```
 
+### Kubernetes certificates
+
 For the chatbot be able to access the Kubernetes cluster inside your StarlingX
 system, it will need a few certificates and key. The chatbot assumes that this
 files are in a folder named `certs/` inside the chatbot directory. For exporting
@@ -82,9 +85,14 @@ sudo scp /etc/kubernetes/pki/apiserver-kubelet-client.key <hostname>@<hostIP>:/h
 
 Make the necessary substitutions in your host address.
 
-Finally, you will need a valid OpenAI API Key in order to run the chatbot. To
-get one visit the [OpenAI website](https://platform.openai.com/docs/overview).
-Since OpenAI API is not free, you may need to pay before using the API key.
+# How to run the chatbot application
+
+## Environment variables
+
+You have to define some environment variable to successfully run the app,
+to see what variables are required, check the [env file](.env)
+
+Store your credentials in a file on `~/.aws/crendetials.txt`
 
 ## Running the chatbot
 
@@ -95,3 +103,10 @@ cd $HOME/poc_GenAI
 source venv/bin/activate
 python3 main.py
 ```
+
+# References
+
+- https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html
+- https://python.langchain.com/docs/integrations/platforms/aws
+- https://python.langchain.com/docs/integrations/llms/bedrock
+- https://api.python.langchain.com/en/latest/llms/langchain_community.llms.bedrock.Bedrock.html
