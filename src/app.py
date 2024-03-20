@@ -1,3 +1,4 @@
+import boto3
 import datetime
 import json
 import logging
@@ -102,21 +103,24 @@ def ask(query, session):
     response = session['generator'].invoke(query_completion)
 
     print(f'######{response}', file=sys.stderr)
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    prompt_status = client.chat.completions.create(
-        model='gpt-3.5-turbo',
-        messages=[
-            {
-                "role": "system",
-                "content": "Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative.",
-            },
-            {
-                "role": "user",
-                "content": f"Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't answer nothing besides it.\nUser query {query}\nResponse: {response['answer']}",
-            },
-        ],
-    )
-    print(f'prompt status: {prompt_status.choices[0].message.content}', file=sys.stderr)
+
+    client = boto3.client(service_name='bedrock-runtime')
+    prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>>User query:{query}\nResponse: {response} [/INST]"
+
+    body = json.dumps({
+    "prompt": prompt_status,
+    "temperature": 0.1,
+    "top_p": 0.9,
+    })
+
+    modelId = 'meta.llama2-13b-chat-v1'
+    accept = 'application/json'
+    contentType = 'application/json'
+
+    response = client.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
+    response_body = json.loads(response.get('body').read())
+    print(response_body['generation'])
+
     if 'negative' in prompt_status.choices[0].message.content.lower():
         LOG.info("Negative response from LLM")
         feed_vectorstore(query, session)
@@ -133,10 +137,6 @@ def feed_vectorstore(query, session):
         raise Exception('API response is null')
 
     print(f'API response: {response}', file=sys.stderr)
-
-    # regex = r"(?=.*\binternal\b)(?=.*\bserver\b)(?=.*\berror\b).+"
-    # if re.search(regex, response.lower()):
-    #     response = CLIENT_ERROR_MSG
 
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=0)
     all_splits = text_splitter.split_text(response)
@@ -155,26 +155,11 @@ def feed_vectorstore(query, session):
     )
 
 
-def set_openai_key():
+def is_api_key_valid():
     create_logger()
     try:
-        global OPENAI_API_KEY
-        OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
-        is_api_key_valid(OPENAI_API_KEY)
-    except Exception:
-        raise Exception("Error while trying to set OpenAI API Key variable")
-    LOG.info("API key configured")
-    return True
-
-
-def is_api_key_valid(key):
-    try:
-        client = OpenAI(api_key=key)
-        _ = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": "This is a test."}],
-            max_tokens=5,
-        )
+        client = boto3.client(service_name='bedrock')
+        _ = client.list_foundation_models()
     except Exception:
         raise Exception("The provided key is not valid.")
     return True
