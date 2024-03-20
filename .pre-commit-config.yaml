@@ -1,0 +1,31 @@
+---
+default_stages: [commit]
+default_language_version:
+    python: python3.8
+repos:
+  - repo: local
+    hooks:
+    - id: flake8
+      name: flake8 - code lint and style checks
+      entry: flake8
+      language: python
+      types: [python]
+      args: [--config, .flake8]
+    - id: isort
+      name: isort - import sorting
+      entry: isort
+      language: python
+      types: [python]
+      args: [--settings-path, pyproject.toml]
+    - id: black
+      name: black - check formatting (show diff on FAIL)
+      entry: black
+      language: python
+      types: [python]
+      args: [--config, pyproject.toml, --check, --diff, --color, --quiet]
+    - id: black
+      name: black - auto-format code on FAIL
+      entry: black
+      language: python
+      types: [python]
+      args: [--config, pyproject.toml]

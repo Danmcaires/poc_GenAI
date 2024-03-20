@@ -26,9 +26,22 @@ cd poc_GenAI
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install -r dev-requirements.txt
 mkdir certs
 ```
+
+### Contributing
+
+This repository uses pre-commit to run some linter checks to format the code
+according to [PEP 8](https://peps.python.org/pep-0008/). To install pre-commit,
+first install the development requirements and install pre-commit by running:
+
+```bash
+pip install -r dev-requirements.txt
+pre-commit install
+```
+
+Now, every time you commit something, these lint tools will run and format your
+code if necessary.
 
 ### VirtualBox connection
 
