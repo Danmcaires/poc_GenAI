@@ -10,35 +10,12 @@ import os
 
 class k8s_request():
 
-    # def __init__(self):
-    def __init__(self, user_query, key, instance):
-        # Get IP
-        ip = instance['URL']
-        pattern = r"(https?)://(?:\d{1,3}\.){3}\d{1,3}:"
-        match = re.search(pattern, ip)
-        self.oam_ip = match.group(0)
-
-        # Get name
-        self.name = instance['name']
-
-        # Get Kubernetes TOKEN
-        self.k8s_token = instance['token']
-
+    def __init__(self, key):
         # Namespaces to be ignored
         self.excluded_namespaces = ["armada", "cert-manager", "flux-helm", "kube-system"]
 
         # API key
         self.api_key = key
-
-        # Necessary API address
-        if "https" in self.oam_ip:
-            self.api_server_url = f"{self.oam_ip}6443"
-        else:
-            secure_oam = self.oam_ip.replace("http://", "https://")
-            self.api_server_url = f"{secure_oam}6443"
-
-        # User query
-        self.query = user_query
 
 
     def get_endpoint(self):
@@ -55,6 +32,7 @@ class k8s_request():
             api_endpoint = f"{self.api_server_url}/version"
 
         return api_endpoint
+
 
     def get_api_completion(self):
         # Initiate OpenAI
@@ -81,6 +59,7 @@ class k8s_request():
 
         return clean_completion
 
+
     def filter_response(self, response):
         if response.json().get('items', []) != []:
             pods = response.json().get('items', [])
@@ -93,7 +72,23 @@ class k8s_request():
         else:
             return response.json()
 
-    def get_API_response(self):
+
+    def save_query_and_instance(self, user_query, instance):
+        self.query = user_query
+        self.name = instance['name']
+        self.k8s_token = instance['token']
+        self.oam_ip = re.search(r"(https?)://(?:\d{1,3}\.){3}\d{1,3}:", instance['URL']).group(0)
+        if "https" in self.oam_ip:
+            self.api_server_url = f"{self.oam_ip}6443"
+        else:
+            secure_oam = self.oam_ip.replace("http://", "https://")
+            self.api_server_url = f"{secure_oam}6443"
+
+
+    def get_API_response(self, user_query, instance):
+        # Save class variables
+        self.save_query_and_instance(user_query, instance)
+
         # Define Kubernetes API endpoint
         api_endpoint = self.get_endpoint()
         if api_endpoint == "-1":
@@ -125,27 +120,9 @@ class k8s_request():
 
 class wr_request():
 
-    def __init__(self, user_query, key, instance):
-        # Load env variables
-        self.auth_url = instance['URL']
-        self.user = os.environ['WR_USER']
-        self.password = os.environ['WR_PASSWORD']
-        self.name = instance['name']
-        self.type = instance['type']
-
-        # Necessary API address
-        pattern = r"(https?)://(?:\d{1,3}\.){3}\d{1,3}:"
-        match = re.search(pattern, self.auth_url)
-        self.api_server_url = match.group(0)
-
-        # Necessary token
-        self.token = self.get_token()
-
+    def __init__(self, key):
         # API key
         self.api_key = key
-
-        # User query
-        self.query = user_query
 
         # Embedded list of Wind River APIs
         self.apis = self.load_embedded_apis()
@@ -191,14 +168,27 @@ class wr_request():
         return clean_completion
 
 
-    def get_API_response(self):
+    def save_query_and_instance(self, user_query, instance):
+        self.auth_url = instance['URL']
+        self.user = os.environ['WR_USER']
+        self.password = os.environ['WR_PASSWORD']
+        self.name = instance['name']
+        self.type = instance['type']
+        self.api_server_url = re.search(r"(https?)://(?:\d{1,3}\.){3}\d{1,3}:", self.auth_url).group(0)
+        self.query = user_query
+        self.token = self.get_token()
+
+
+    def get_API_response(self, user_query, instance):
+        # Save class variables
+        self.save_query_and_instance(user_query, instance)
+
         url = self.get_endpoint()
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "X-Auth-Token": self.token
         }
-
 
         try:
             print(f'API address: {url}', file=sys.stderr)
@@ -216,8 +206,6 @@ class wr_request():
             error = f"Error trying to make API request:\n {response.status_code}, {response.text}"
             LOG.warning(error)
             return error
-
-
 
     def get_token(self):
         url = f"{self.auth_url}/v3/auth/tokens"
@@ -261,9 +249,3 @@ class wr_request():
             error = f"Error trying to retrieve authentication token:\n {response.status_code}, {response.text}"
             LOG.warning(error)
             return error
-
-
-
-
-class openstack_request():
-    pass

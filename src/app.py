@@ -46,9 +46,13 @@ def new_session(model, temperature):
     # Give the LLM date time context
     query = f"From now on you will use {datetime.datetime.now()} as current datetime for any datetime related user query"
     generator.invoke(query)
+    
+    # Create API connections
+    k8s_bot = k8s_request(OPENAI_API_KEY)
+    wr_bot = wr_request(OPENAI_API_KEY)
 
     # Add session to sessions map
-    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id}
+    sessions[session_id] = {"generator": generator, "llm": llm, "id": session_id, "k8s_bot": k8s_bot, "wr_bot": wr_bot}
     LOG.info(f"New session with ID: {session_id} initiated. Model: {model}, Temperature: {temperature}")
     return sessions[session_id]
 
@@ -195,11 +199,9 @@ def api_response(query, session):
     print(f'LLM defined {pool} as the API subject', file=sys.stderr)
     LOG.info(f'LLM defined {pool} as the API subject')
     if pool == "Kubernetes":
-        bot = k8s_request(query, OPENAI_API_KEY, instance)
-        response = k8s_request.get_API_response(bot)
+        response = session["k8s_bot"].get_API_response(user_query=query, instance=instance)
     elif pool == "Wind River":
-        bot = wr_request(query, OPENAI_API_KEY, instance)
-        response = wr_request.get_API_response(bot)
+        response = session["wr_bot"].get_API_response(user_query=query, instance=instance)
     else:
         response = CLIENT_ERROR_MSG
 
