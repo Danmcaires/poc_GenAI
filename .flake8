@@ -1,5 +1,5 @@
 [flake8]
-ignore = E203, E266, E501, E722, E731, W503, F541, F811
+ignore = E203, E266, E722, E731, W503, F541, F811
 max-line-length = 100
 max-doc-length = 100
 exclude=.
@@ -13,7 +13,6 @@ select = B,C,E,F,W,T4,B9
 # https://pep8.readthedocs.io/en/release-1.7.x/intro.html#error-codes
 # E203 - "space before :" (needed for Black)
 # E266 - too many leading ‘#’ for block comment
-# E501 - line too long
 # E722 - do not use bare except, specify exception instead
 # E731 - do not assign a lambda expression, use a def
 # W503 - line breaks before binary operators
