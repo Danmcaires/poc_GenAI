@@ -1,4 +1,3 @@
-import boto3
 import datetime
 import json
 import logging
@@ -6,6 +5,7 @@ import os
 import sys
 import uuid
 
+import boto3
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory.buffer import ConversationBufferMemory
 from langchain.schema.document import Document
@@ -17,7 +17,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from openai import OpenAI
 
 from api_request import k8s_request, wr_request
-from constants import CLIENT_ERROR_MSG, LOG
+from constants import CLIENT_ERROR_MSG, LOG, MODEL
 
 
 def initiate_sessions():
@@ -107,17 +107,21 @@ def ask(query, session):
     client = boto3.client(service_name='bedrock-runtime')
     prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>>User query:{query}\nResponse: {response} [/INST]"
 
-    body = json.dumps({
-    "prompt": prompt_status,
-    "temperature": 0.1,
-    "top_p": 0.9,
-    })
+    body = json.dumps(
+        {
+            "prompt": prompt_status,
+            "temperature": 0.1,
+            "top_p": 0.9,
+        }
+    )
 
-    modelId = 'meta.llama2-13b-chat-v1'
+    modelId = MODEL
     accept = 'application/json'
     contentType = 'application/json'
 
-    response = client.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
+    response = client.invoke_model(
+        body=body, modelId=modelId, accept=accept, contentType=contentType
+    )
     response_body = json.loads(response.get('body').read())
     print(response_body['generation'])
 
@@ -222,21 +226,25 @@ def define_system(query):
     prompt_status = f"<s>[INST] <<SYS>>You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about. Make sure that only 1 is given in your response, the answer will never be more than 1 instance. Your answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response.<</SYS>>List of available instances: {node_list}\nUser query: {query}\nYour answer will only have what the format dictates, don't add any other text. If the query did not informed any instance name, you will answer 'name: System Controller'. You will not choose a subcloud that isn't explicitly asked about.[/INST]"
 
     # Create request body
-    body = json.dumps({
-    "prompt": prompt_status,
-    "temperature": 0.1,
-    "top_p": 0.9,
-    })
+    body = json.dumps(
+        {
+            "prompt": prompt_status,
+            "temperature": 0.1,
+            "top_p": 0.9,
+        }
+    )
 
-    modelId = 'meta.llama2-13b-chat-v1'
+    modelId = MODEL
     accept = 'application/json'
     contentType = 'application/json'
 
     # Get completion
-    response = client.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
+    response = client.invoke_model(
+        body=body, modelId=modelId, accept=accept, contentType=contentType
+    )
 
     response_body = json.loads(response.get('body').read())
-    print(f'Completion: {response_body['generation']}', file=sys.stderr)
+    print(f'Completion: {response_body["generation"]}', file=sys.stderr)
     name = response_body['generation'].split(":")[1].strip().replace(".", "")
 
     print(f'Result after normalization: {name}', file=sys.stderr)
