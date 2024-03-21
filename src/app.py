@@ -5,6 +5,7 @@ import os
 import sys
 import uuid
 
+import boto3
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory.buffer import ConversationBufferMemory
 from langchain.schema.document import Document
@@ -16,7 +17,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from openai import OpenAI
 
 from api_request import k8s_request, wr_request
-from constants import CLIENT_ERROR_MSG, LOG
+from constants import CLIENT_ERROR_MSG, LOG, MODEL
 
 
 def initiate_sessions():
@@ -102,21 +103,28 @@ def ask(query, session):
     response = session['generator'].invoke(query_completion)
 
     print(f'######{response}', file=sys.stderr)
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    prompt_status = client.chat.completions.create(
-        model='gpt-3.5-turbo',
-        messages=[
-            {
-                "role": "system",
-                "content": "Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative.",
-            },
-            {
-                "role": "user",
-                "content": f"Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't answer nothing besides it.\nUser query {query}\nResponse: {response['answer']}",
-            },
-        ],
+
+    client = boto3.client(service_name='bedrock-runtime')
+    prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>>User query:{query}\nResponse: {response} [/INST]"
+
+    body = json.dumps(
+        {
+            "prompt": prompt_status,
+            "temperature": 0.1,
+            "top_p": 0.9,
+        }
     )
-    print(f'prompt status: {prompt_status.choices[0].message.content}', file=sys.stderr)
+
+    modelId = MODEL
+    accept = 'application/json'
+    contentType = 'application/json'
+
+    response = client.invoke_model(
+        body=body, modelId=modelId, accept=accept, contentType=contentType
+    )
+    response_body = json.loads(response.get('body').read())
+    print(response_body['generation'])
+
     if 'negative' in prompt_status.choices[0].message.content.lower():
         LOG.info("Negative response from LLM")
         feed_vectorstore(query, session)
@@ -133,10 +141,6 @@ def feed_vectorstore(query, session):
         raise Exception('API response is null')
 
     print(f'API response: {response}', file=sys.stderr)
-
-    # regex = r"(?=.*\binternal\b)(?=.*\bserver\b)(?=.*\berror\b).+"
-    # if re.search(regex, response.lower()):
-    #     response = CLIENT_ERROR_MSG
 
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=0)
     all_splits = text_splitter.split_text(response)
@@ -155,26 +159,11 @@ def feed_vectorstore(query, session):
     )
 
 
-def set_openai_key():
+def is_api_key_valid():
     create_logger()
     try:
-        global OPENAI_API_KEY
-        OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
-        is_api_key_valid(OPENAI_API_KEY)
-    except Exception:
-        raise Exception("Error while trying to set OpenAI API Key variable")
-    LOG.info("API key configured")
-    return True
-
-
-def is_api_key_valid(key):
-    try:
-        client = OpenAI(api_key=key)
-        _ = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": "This is a test."}],
-            max_tokens=5,
-        )
+        client = boto3.client(service_name='bedrock')
+        _ = client.list_foundation_models()
     except Exception:
         raise Exception("The provided key is not valid.")
     return True
@@ -228,31 +217,36 @@ def api_response(query, session):
 
 
 def define_system(query):
-    # Initiate OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    # Initiate Boto3
+    client = boto3.client(service_name='bedrock-runtime')
 
-    # Expected llm response format
     format_response = "name: <name>"
 
     # Create prompt
-    system_prompt = f"You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about."
-    user_prompt = f"Make sure that only 1 is given in your response, the answer will never be more than 1 instance. If the user did not specified which instance he wants the information, you will provide the information of the instance that contains central cloud as type.\nYour answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response."
+    prompt_status = f"<s>[INST] <<SYS>>You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about. Make sure that only 1 is given in your response, the answer will never be more than 1 instance. Your answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response.<</SYS>>List of available instances: {node_list}\nUser query: {query}\nYour answer will only have what the format dictates, don't add any other text. If the query did not informed any instance name, you will answer 'name: System Controller'. You will not choose a subcloud that isn't explicitly asked about.[/INST]"
 
-    # Get completion
-    completion = client.chat.completions.create(
-        model="gpt-4-turbo-preview",
-        temperature=0.5,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"List of available instances: {node_list}\nUser query: {query}\n\n{user_prompt}",
-            },
-        ],
+    # Create request body
+    body = json.dumps(
+        {
+            "prompt": prompt_status,
+            "temperature": 0.1,
+            "top_p": 0.9,
+        }
     )
 
-    print(f'Completion: {completion.choices[0].message.content}', file=sys.stderr)
-    name = completion.choices[0].message.content.split(":")[1].strip().replace(".", "")
+    modelId = MODEL
+    accept = 'application/json'
+    contentType = 'application/json'
+
+    # Get completion
+    response = client.invoke_model(
+        body=body, modelId=modelId, accept=accept, contentType=contentType
+    )
+
+    response_body = json.loads(response.get('body').read())
+    print(f'Completion: {response_body["generation"]}', file=sys.stderr)
+    name = response_body['generation'].split(":")[1].strip().replace(".", "")
+
     print(f'Result after normalization: {name}', file=sys.stderr)
     node_dict = {}
 
