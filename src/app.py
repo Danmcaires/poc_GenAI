@@ -213,31 +213,32 @@ def api_response(query, session):
 
 
 def define_system(query):
-    # Initiate OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    # Initiate Boto3
+    client = boto3.client(service_name='bedrock-runtime')
 
-    # Expected llm response format
     format_response = "name: <name>"
 
     # Create prompt
-    system_prompt = f"You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about."
-    user_prompt = f"Make sure that only 1 is given in your response, the answer will never be more than 1 instance. If the user did not specified which instance he wants the information, you will provide the information of the instance that contains central cloud as type.\nYour answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response."
+    prompt_status = f"<s>[INST] <<SYS>>You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about. Make sure that only 1 is given in your response, the answer will never be more than 1 instance. Your answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response.<</SYS>>List of available instances: {node_list}\nUser query: {query}\nYour answer will only have what the format dictates, don't add any other text. If the query did not informed any instance name, you will answer 'name: System Controller'. You will not choose a subcloud that isn't explicitly asked about.[/INST]"
+
+    # Create request body
+    body = json.dumps({
+    "prompt": prompt_status,
+    "temperature": 0.1,
+    "top_p": 0.9,
+    })
+
+    modelId = 'meta.llama2-13b-chat-v1'
+    accept = 'application/json'
+    contentType = 'application/json'
 
     # Get completion
-    completion = client.chat.completions.create(
-        model="gpt-4-turbo-preview",
-        temperature=0.5,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"List of available instances: {node_list}\nUser query: {query}\n\n{user_prompt}",
-            },
-        ],
-    )
+    response = client.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
 
-    print(f'Completion: {completion.choices[0].message.content}', file=sys.stderr)
-    name = completion.choices[0].message.content.split(":")[1].strip().replace(".", "")
+    response_body = json.loads(response.get('body').read())
+    print(f'Completion: {response_body['generation']}', file=sys.stderr)
+    name = response_body['generation'].split(":")[1].strip().replace(".", "")
+
     print(f'Result after normalization: {name}', file=sys.stderr)
     node_dict = {}
 
