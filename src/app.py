@@ -13,8 +13,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.embeddings.bedrock import BedrockEmbeddings
 from langchain_community.llms import Bedrock
 from langchain_community.vectorstores import Chroma
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 
 from api_request import k8s_request, wr_request
 from constants import CLIENT_ERROR_MSG, LOG, MODEL
@@ -43,7 +41,7 @@ def new_session(model_id, temperature):
     generator = ConversationalRetrievalChain.from_llm(llm=llm, retriever=retriever, memory=memory)
 
     # Give the LLM date time context
-    query = f"From now on you will use {datetime.datetime.now()} as current datetime for any datetime related user query"
+    query = f"From now on you will use {datetime.datetime.now()} as current datetime for any datetime related user query"  # noqa: E501
     generator.invoke(query)
 
     # Create API connections
@@ -59,7 +57,8 @@ def new_session(model_id, temperature):
         "wr_bot": wr_bot,
     }
     LOG.info(
-        f"New session with ID: {session_id} initiated. Model: {model_id}, Temperature: {temperature}"
+        f"New session with ID: {session_id} initiated. Model: {model_id}, "
+        f"Temperature: {temperature}"
     )
     return sessions[session_id]
 
@@ -96,7 +95,7 @@ def create_vectorstore(llm):
 def ask(query, session):
     query_completion = (
         query
-        + ". If an API response is provided as context and in the provided API response doesn't have this information or no context is provided, make sure that your response is 'I don't know'. Unless the user explicitly ask for commands you will not provide any. Make sure to read the entire given context before giving your response."
+        + ". If an API response is provided as context and in the provided API response doesn't have this information or no context is provided, make sure that your response is 'I don't know'. Unless the user explicitly ask for commands you will not provide any. Make sure to read the entire given context before giving your response."  # noqa: E501
     )
     LOG.info(f"User query: {query}")
     response = session['generator'].invoke(query_completion)
@@ -104,7 +103,7 @@ def ask(query, session):
     print(f'######{response}', file=sys.stderr)
 
     client = boto3.client(service_name='bedrock-runtime')
-    prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>> </s> User query:{query}\nResponse: {response} [/INST]"
+    prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>> </s> User query:{query}\nResponse: {response} [/INST]"  # noqa: E501
 
     body = json.dumps(
         {
@@ -170,7 +169,7 @@ def is_api_key_valid():
 
 def define_api_pool(query, session):
     # Use LLM to decide if Kubernetes or Wind River API pool should be used.
-    prompt = f"<s>[INST] <<SYS>>You are an AI connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Output the answer in the following format 'response: single_word_answer'.<</SYS>> Example: 'List my active alarms. [\INST] Wind River' </s> [INST] User query:{query} [/INST]"
+    prompt = f"<s>[INST] <<SYS>>You are an AI connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Output the answer in the following format 'response: single_word_answer'.<</SYS>> Example: 'List my active alarms. [\INST] Wind River' </s> [INST] User query:{query} [/INST]"  # noqa: E501,W605
     response = session["llm"].invoke(prompt).lower()
 
     print(f"###########{response}", file=sys.stderr)
@@ -209,7 +208,7 @@ def define_system(query):
     format_response = "name: <name>"
 
     # Create prompt
-    prompt_status = f"<s>[INST] <<SYS>>You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about. Make sure that only 1 is given in your response, the answer will never be more than 1 instance. Your answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response.<</SYS>>List of available instances: {node_list}\nUser query: {query}\nYour answer will only have what the format dictates, don't add any other text. If the query did not informed any instance name, you will answer 'name: System Controller'. You will not choose a subcloud that isn't explicitly asked about.[/INST]"
+    prompt_status = f"<s>[INST] <<SYS>>You are a system that choses a node in a Distributed Cloud environment. Your job is to define which of the instances given in the context, the user is asking about. Make sure that only 1 is given in your response, the answer will never be more than 1 instance. Your answer will follow the format: {format_response}. Make sure this format is followed and nothing else is given in the your response.<</SYS>>List of available instances: {node_list}\nUser query: {query}\nYour answer will only have what the format dictates, don't add any other text. If the query did not informed any instance name, you will answer 'name: System Controller'. You will not choose a subcloud that isn't explicitly asked about.[/INST]"  # noqa: E501
 
     # Create request body
     body = json.dumps(
