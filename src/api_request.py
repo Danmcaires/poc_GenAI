@@ -5,19 +5,17 @@ import sys
 import requests
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
 from constants import CLIENT_ERROR_MSG, LOG
 
 
 class k8s_request:
 
-    def __init__(self, key):
+    def __init__(self, llm):
         # Namespaces to be ignored
         self.excluded_namespaces = ["armada", "cert-manager", "flux-helm", "kube-system"]
 
-        # API key
-        self.api_key = key
+        self.llm = llm
 
     def get_endpoint(self):
         completion = self.get_api_completion()
@@ -35,8 +33,6 @@ class k8s_request:
         return api_endpoint
 
     def get_api_completion(self):
-        # Initiate OpenAI
-        llm = ChatOpenAI(openai_api_key=self.api_key)
 
         # Expected llm response format
         format_response = "api: <api_completion>"
@@ -53,7 +49,7 @@ class k8s_request:
         )
 
         output_parser = StrOutputParser()
-        chain = prompt | llm | output_parser
+        chain = prompt | self.llm | output_parser
 
         # Get completion
         completion = chain.invoke({"input": self.query})
@@ -127,9 +123,9 @@ class k8s_request:
 
 class wr_request:
 
-    def __init__(self, key):
-        # API key
-        self.api_key = key
+    def __init__(self, llm):
+
+        self.llm = llm
 
         # Embedded list of Wind River APIs
         self.apis = self.load_embedded_apis()
@@ -147,8 +143,6 @@ class wr_request:
         return api
 
     def get_api_completion(self):
-        # Initiate OpenAI
-        llm = ChatOpenAI(openai_api_key=self.api_key, temperature=0.4)
 
         # Expected llm response format
         format_response = "api: <api_url>"
@@ -165,7 +159,7 @@ class wr_request:
         )
 
         output_parser = StrOutputParser()
-        chain = prompt | llm | output_parser
+        chain = prompt | self.llm | output_parser
 
         # Get completion
         completion = chain.invoke({"context": self.apis, "question": self.query})

@@ -10,11 +10,11 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory.buffer import ConversationBufferMemory
 from langchain.schema.document import Document
 from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.embeddings.bedrock import BedrockEmbeddings
+from langchain_community.llms import Bedrock
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from openai import OpenAI
 
 from api_request import k8s_request, wr_request
 from constants import CLIENT_ERROR_MSG, LOG, MODEL
@@ -31,11 +31,12 @@ def get_session(session_id):
     return sessions.get(session_id)
 
 
-def new_session(model, temperature):
+def new_session(model_id, temperature):
+    client = boto3.client(service_name='bedrock-runtime')
+
     # Create vectorstore
-    llm = ChatOpenAI(
-        model_name=model, temperature=float(temperature), openai_api_key=OPENAI_API_KEY
-    )
+    llm = Bedrock(client=client, model_id=model_id, model_kwargs={"temperature": 0})
+
     session_id = str(uuid.uuid4())
     memory, retriever = create_vectorstore(llm)
     # Create chat response generator
@@ -46,8 +47,8 @@ def new_session(model, temperature):
     generator.invoke(query)
 
     # Create API connections
-    k8s_bot = k8s_request(OPENAI_API_KEY)
-    wr_bot = wr_request(OPENAI_API_KEY)
+    k8s_bot = k8s_request(llm)
+    wr_bot = wr_request(llm)
 
     # Add session to sessions map
     sessions[session_id] = {
@@ -58,7 +59,7 @@ def new_session(model, temperature):
         "wr_bot": wr_bot,
     }
     LOG.info(
-        f"New session with ID: {session_id} initiated. Model: {model}, Temperature: {temperature}"
+        f"New session with ID: {session_id} initiated. Model: {model_id}, Temperature: {temperature}"
     )
     return sessions[session_id]
 
@@ -84,9 +85,7 @@ def create_vectorstore(llm):
     # Create Chroma vector store
     data_start = "start vectorstore"
     docs = [Document(page_content=x) for x in data_start]
-    vectorstore = Chroma.from_documents(
-        documents=docs, embedding=OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-    )
+    vectorstore = Chroma.from_documents(documents=docs, embedding=BedrockEmbeddings())
 
     memory = ConversationBufferMemory(llm=llm, memory_key="chat_history", return_messages=True)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
@@ -123,15 +122,17 @@ def ask(query, session):
         body=body, modelId=modelId, accept=accept, contentType=contentType
     )
     response_body = json.loads(response.get('body').read())
-    print(response_body['generation'])
+    final_response = response_body['generation']
+    print(final_response, file=sys.stderr)
 
-    if 'negative' in prompt_status.choices[0].message.content.lower():
+    if 'negative' in response_body['generation'].lower():
         LOG.info("Negative response from LLM")
         feed_vectorstore(query, session)
         response = session['generator'].invoke(query)
+        final_response = response['answer']
 
-    LOG.info(f"Chatbot response: {response['answer']}")
-    return response['answer']
+    LOG.info(f"Chatbot response: {final_response}")
+    return final_response
 
 
 def feed_vectorstore(query, session):
@@ -145,9 +146,7 @@ def feed_vectorstore(query, session):
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=0)
     all_splits = text_splitter.split_text(response)
     docs = [Document(page_content=x) for x in all_splits]
-    vectorstore = Chroma.from_documents(
-        documents=docs, embedding=OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-    )
+    vectorstore = Chroma.from_documents(documents=docs, embedding=BedrockEmbeddings())
 
     llm = session['llm']
 
@@ -187,7 +186,7 @@ def define_api_pool(query, session):
     chain = prompt | session["llm"] | output_parser
     response = chain.invoke({"input": complete_query})
 
-    print(f"###########{response}")
+    print(f"###########{response}", file=sys.stderr)
     if response.lower() == "kubernetes":
         return "Kubernetes"
     elif response.lower() == "wind river":
