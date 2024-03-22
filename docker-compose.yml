@@ -9,7 +9,6 @@ services:
     volumes:
       - ./subclouds.json:/app/src/subclouds.json
     environment:
-      OPENAI_API_KEY: ${openai_key}
       OAM_IP: ${oam_ip}
       WR_USER: ${user}
       WR_PASSWORD: ${password}
