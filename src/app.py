@@ -104,7 +104,7 @@ def ask(query, session):
     print(f'######{response}', file=sys.stderr)
 
     client = boto3.client(service_name='bedrock-runtime')
-    prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>>User query:{query}\nResponse: {response} [/INST]"
+    prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>> </s> User query:{query}\nResponse: {response} [/INST]"
 
     body = json.dumps(
         {
@@ -170,26 +170,13 @@ def is_api_key_valid():
 
 def define_api_pool(query, session):
     # Use LLM to decide if Kubernetes or Wind River API pool should be used.
-    complete_query = f"Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Make sure that your response only contains the name Wind River or the name Kubernetes and nothing else.\n\nUser query: {query}"
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "You are an AI connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question.",
-            ),
-            ("user", "{input}"),
-        ]
-    )
-
-    output_parser = StrOutputParser()
-    chain = prompt | session["llm"] | output_parser
-    response = chain.invoke({"input": complete_query})
+    prompt = f"<s>[INST] <<SYS>>You are an AI connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Output the answer in the following format 'response: single_word_answer'.<</SYS>> Example: 'List my active alarms. [\INST] Wind River' </s> [INST] User query:{query} [/INST]"
+    response = session["llm"].invoke(prompt).lower()
 
     print(f"###########{response}", file=sys.stderr)
-    if response.lower() == "kubernetes":
+    if "kubernetes" in response:
         return "Kubernetes"
-    elif response.lower() == "wind river":
+    elif "wind river" in response:
         return "Wind River"
     else:
         return "Undefined"
