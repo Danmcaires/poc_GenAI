@@ -169,7 +169,8 @@ def is_api_key_valid():
 
 def define_api_pool(query, session):
     # Use LLM to decide if Kubernetes or Wind River API pool should be used.
-    prompt = f"<s>[INST] <<SYS>>You are an AI connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Output the answer in the following format 'response: single_word_answer'.<</SYS>> Example: 'List my active alarms. [\INST] Wind River' </s> [INST] User query:{query} [/INST]"  # noqa: E501,W605
+    system_prompt = "You are an AI assistant connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Do not acknowledge my request with 'sure' or in any other way besides going straight to the answer. Your answer should not contain the word API"  # noqa: E501,W605
+    prompt = f"<s>[INST] <<SYS>>{system_prompt}<</SYS>> Example: 'List my active alarms. [\INST] Wind River' </s> [INST] User query:{query} [/INST]"  # noqa: E501,W605
     response = session["llm"].invoke(prompt).lower()
 
     print(f"###########{response}", file=sys.stderr)
