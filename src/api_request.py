@@ -132,29 +132,16 @@ class wr_request:
         return api
 
     def get_api_completion(self):
-
         # Expected llm response format
-        format_response = "api: <api_url>"
+        format_response = "api: <api_completion>"
 
-        # Create prompt
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    f"You are an API generator, based on the user question you will suggest the best API endpoint to retrieve the information from a Wind River cluster.\n\nYou will look in the context for the available APIs in a Wind River cluster.\n\nMake sure the provided endpoint is present on the provided context and check the action of the APIs to provide the ideal url for the user question. This user question is being made to a {self.type}.\n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Guarantee that the format is followed. Read the entire context before providing an answer.",
-                ),
-                ("user", "Context:{context} \n\n\n Question:{question}"),
-            ]
-        )
+        prompt = f"<s>[INST] <<SYS>>You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a Wind River cluster. \n\nYou will look in the context for the available APIs in a Wind River cluster.\n\nMake sure the provided endpoint is present on the provided context and check the action of the APIs to provide the ideal url for the user question. \n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Don't add any other text besides what the format dictates. Do not acknowledge my request with 'sure' or in any other way besides going straight to the answer. \n\nRead the entire context before providing an answer and guarantee that the format is followed.\n\n\This user question is being made to a {self.type}.\n\n<</SYS>>Context: {self.apis} \n\nUser query: {self.query}[/INST]"
 
-        output_parser = StrOutputParser()
-        chain = prompt | self.llm | output_parser
-
-        # Get completion
-        completion = chain.invoke({"context": self.apis, "question": self.query})
-
-        # completion = response.choices[0].message.content
-        clean_completion = completion.split(":")[1].strip()
+        completion = self.llm.invoke(prompt).lower()
+        if len(completion.split(":")) > 1:
+            clean_completion = completion.split(":")[1].strip()
+        else:
+            clean_completion = "-1"
 
         return clean_completion
 
