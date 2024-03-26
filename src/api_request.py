@@ -38,21 +38,10 @@ class k8s_request:
         format_response = "api: <api_completion>"
 
         # Create prompt
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    f"You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a kubernetes cluster.\n\nYou will only provide the API information that comes after the IP:PORT.\n\nMake sure the provided endpoint is a valid one.\n\nAlso make sure to only provide the API endpoint following the format: {format_response}. Guarantee that the format is followed.",
-                ),
-                ("user", "{input}"),
-            ]
-        )
-
-        output_parser = StrOutputParser()
-        chain = prompt | self.llm | output_parser
+        prompt = f"<s>[INST] <<SYS>>You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a kubernetes cluster. You will only provide the API information that comes after the IP:PORT. Make sure the provided kubernetes endpoint exists before answering. Also make sure to only provide the API endpoint following the format: {format_response}. Don't add any other text besides what the format dictates. Do not acknowledge my request with 'sure' or in any other way besides going straight to the answer. Guarantee that the format is followed.<</SYS>>User query: {self.query}[/INST]"
 
         # Get completion
-        completion = chain.invoke({"input": self.query})
+        completion = self.llm.invoke(prompt).lower()
         if len(completion.split(":")) > 1:
             clean_completion = completion.split(":")[1].strip()
         else:
