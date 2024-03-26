@@ -6,7 +6,7 @@ import requests
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from constants import CLIENT_ERROR_MSG, LOG
+from constants import CLIENT_ERROR_MSG, LLAMA_PROMPT_END, LOG
 
 
 class k8s_request:
@@ -38,7 +38,7 @@ class k8s_request:
         format_response = "api: <api_completion>"
 
         # Create prompt
-        prompt = f"<s>[INST] <<SYS>>You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a kubernetes cluster. You will only provide the API information that comes after the IP:PORT. Make sure the provided kubernetes endpoint exists before answering. Also make sure to only provide the API endpoint following the format: {format_response}. Don't add any other text besides what the format dictates. Do not acknowledge my request with 'sure' or in any other way besides going straight to the answer. Guarantee that the format is followed.<</SYS>>User query: {self.query}[/INST]"
+        prompt = f"<s>[INST] <<SYS>>You are an API generator, based on the user input you will suggest the best API endpoint to retrieve the information from a kubernetes cluster. You will only provide the API information that comes after the IP:PORT. Make sure the provided kubernetes endpoint exists before answering. Also make sure to only provide the API endpoint following the format: {format_response}. Don't add any other text besides what the format dictates. {LLAMA_PROMPT_END}.<</SYS>>User query: {self.query}[/INST]"  # noqa: E501
 
         # Get completion
         completion = self.llm.invoke(prompt).lower()
@@ -93,7 +93,10 @@ class k8s_request:
             LOG.info(f'API address: {api_endpoint}')
             response = requests.get(api_endpoint, headers=headers, verify=False)
         except Exception as e:
-            error = f"An error ocurred while trying to retrieve the information, please rewrite the question and try again.\n Error: {e}"
+            error = (
+                f"An error ocurred while trying to retrieve the information, "
+                f"please rewrite the question and try again.\n Error: {e}"
+            )
             LOG.warning(error)
             return error
 
@@ -186,7 +189,10 @@ class wr_request:
             LOG.info(f'API address: {url}')
             response = requests.get(url, headers=headers, verify=False)
         except Exception as e:
-            error = f"An error ocurred while trying to retrieve the information, please rewrite the question and try again.\n Error: {e}"
+            error = (
+                f"An error ocurred while trying to retrieve the information, please "
+                f"rewrite the question and try again.\n Error: {e}"
+            )
             LOG.warning(error)
             return error
 
@@ -220,7 +226,10 @@ class wr_request:
         try:
             response = requests.post(url, headers=headers, json=data, verify=False)
         except Exception as e:
-            error = f"An error ocurred while trying to retrieve the authentication for the Wind River APIs. Error:{e}"
+            error = (
+                f"An error ocurred while trying to retrieve the authentication for the "
+                f"Wind River APIs. Error:{e}"
+            )
             LOG.error(error)
             return error
 
@@ -230,6 +239,9 @@ class wr_request:
 
             return x_auth_token
         else:
-            error = f"Error trying to retrieve authentication token:\n {response.status_code}, {response.text}"
+            error = (
+                f"Error trying to retrieve authentication token:\n {response.status_code}, "
+                f"{response.text}"
+            )
             LOG.warning(error)
             return error
