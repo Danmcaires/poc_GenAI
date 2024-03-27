@@ -99,8 +99,9 @@ def ask(query, session):
     )
     LOG.info(f"User query: {query}")
     response = session['generator'].invoke(query_completion)
+    chat_response = response['answer']
 
-    print(f'######{response}', file=sys.stderr)
+    print(f'######{chat_response}', file=sys.stderr)
 
     client = boto3.client(service_name='bedrock-runtime')
     prompt_status = f"<s>[INST] <<SYS>>Your task is to understand the context of a text. Look for clues indicating whether the text provides information about a subject. If you come across phrases such as 'I'm sorry', 'no context', 'no information', or 'I don't know', it likely means there isn't enough information available. Similarly, if the text mentions not having access to the information, or if it offers directives without the user requesting them explicitly, the context is negative. Based on the following text, check if the general context indicates that there is information about what is being asked or not. Make sure to answer only the words 'positive' if there is information, or 'negative' if there isn't. Don't elaborate in your answer simply say 'positive' or 'negative'.<</SYS>> </s> User query:{query}\nResponse: {response} [/INST]"  # noqa: E501
@@ -121,17 +122,17 @@ def ask(query, session):
         body=body, modelId=modelId, accept=accept, contentType=contentType
     )
     response_body = json.loads(response.get('body').read())
-    final_response = response_body['generation']
-    print(final_response, file=sys.stderr)
+    sentiment_analisys = response_body['generation']
+    print(f"sentiment: {sentiment_analisys}", file=sys.stderr)
 
-    if 'negative' in response_body['generation'].lower():
+    if 'negative' in sentiment_analisys.lower():
         LOG.info("Negative response from LLM")
         feed_vectorstore(query, session)
         response = session['generator'].invoke(query)
-        final_response = response['answer']
+        chat_response = response['answer']
 
-    LOG.info(f"Chatbot response: {final_response}")
-    return final_response
+    LOG.info(f"Chatbot response: {chat_response}")
+    return chat_response
 
 
 def feed_vectorstore(query, session):
