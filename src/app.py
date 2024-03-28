@@ -15,7 +15,7 @@ from langchain_community.llms import Bedrock
 from langchain_community.vectorstores import Chroma
 
 from api_request import k8s_request, wr_request
-from constants import CLIENT_ERROR_MSG, LOG, MODEL
+from constants import CLIENT_ERROR_MSG, LLAMA_PROMPT_END, LOG, MODEL
 
 
 def initiate_sessions():
@@ -169,7 +169,7 @@ def is_api_key_valid():
 
 def define_api_pool(query, session):
     # Use LLM to decide if Kubernetes or Wind River API pool should be used.
-    system_prompt = "You are an AI assistant connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Do not acknowledge my request with 'sure' or in any other way besides going straight to the answer. Your answer should not contain the word API"  # noqa: E501,W605
+    system_prompt = f"You are an AI assistant connected to a Wind River system and based on the user query you will define which set of APIs is best to retrieve the necessary information to answer the question. Based on the following query you will choose between Wind River APIs and Kubernetes APIs. You will not provide that specific API, only inform if it is a Wind River or a Kubernetes API. Your answer should not contain the word API. {LLAMA_PROMPT_END}"  # noqa: E501,W605
     prompt = f"<s>[INST] <<SYS>>{system_prompt}<</SYS>> Example: 'List my active alarms. [\INST] Wind River' </s> [INST] User query:{query} [/INST]"  # noqa: E501,W605
     response = session["llm"].invoke(prompt).lower()
 
