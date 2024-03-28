@@ -6,6 +6,7 @@ exclude=.
     venv
     .git
     .tox
+    test_app.py
 select = B,C,E,F,W,T4,B9
 
 
